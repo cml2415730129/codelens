@@ -11,6 +11,8 @@ cd "$(dirname "$0")"
 # --- Java version check ---
 if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
   JAVA="$JAVA_HOME/bin/java"
+elif [ -x "$HOME/.sdkman/candidates/java/current/bin/java" ]; then
+  JAVA="$HOME/.sdkman/candidates/java/current/bin/java"
 else
   JAVA="$(command -v java || true)"
 fi
