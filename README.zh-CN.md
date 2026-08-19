@@ -34,6 +34,23 @@
         output/<owner>-<repo>/REPORT.md
 ```
 
+## 📡 RepoRadar —— 持续盯仓雷达
+
+CodeLens 内置 **RepoRadar**：维护一份仓库清单，定时巡检，告诉你哪里变了 —— 新提交、新版本、breaking 变更 —— 由 LLM 生成增量摘要。这是对话框 AI 做不到的事：**它在你不看它的时候也在工作。**
+
+```bash
+./codelens radar                        # 巡检一遍
+./codelens radar add https://github.com/owner/repo
+./codelens radar list
+./codelens --serve                      # 仪表盘 → http://localhost:8321/radar.html
+```
+
+- 清单在 `watchlist.yml`；状态与历史在 `~/.codelens/radar/state.json`
+- 严重级别：⚪ 平静 · 🟢 新提交 · 🚀 发新版 · 🚨 release notes 中检出 breaking change
+- 摘要是增量的：LLM 只处理真正发生变化的仓库
+- 设置 `GITHUB_TOKEN` 可获得更高 API 限额（可选）
+- 把 `radar check` 挂到 cron / 智能体运行时，即可无人值守监控
+
 ## 三分钟上手
 
 **唯一前置要求：JDK 17+**。不需要预装 Maven 和 git 客户端（构建走 Maven Wrapper 或本机 `mvn`，克隆用纯 Java 的 JGit）。

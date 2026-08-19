@@ -34,6 +34,23 @@ Built on **[AgentScope Java 2.0](https://github.com/agentscope-ai/agentscope-jav
         output/<owner>-<repo>/REPORT.md
 ```
 
+## 📡 RepoRadar — continuous repo watching
+
+CodeLens also ships **RepoRadar**: a watchlist-driven radar that checks your repos on a schedule and tells you what changed — new commits, releases, breaking changes — with LLM-written incremental digests. This is what a chatbot can't do: it works while you're not looking.
+
+```bash
+./codelens radar                        # run one sweep
+./codelens radar add https://github.com/owner/repo
+./codelens radar list
+./codelens --serve                      # dashboard → http://localhost:8321/radar.html
+```
+
+- Watchlist lives in `watchlist.yml`; state & history in `~/.codelens/radar/state.json`
+- Severity levels: ⚪ quiet · 🟢 new commits · 🚀 new release · 🚨 breaking change detected in release notes
+- Digests are incremental: the LLM only runs on repos that actually changed
+- Set `GITHUB_TOKEN` for higher API rate limits (optional)
+- Wire `radar check` into cron / your agent runtime for hands-free monitoring
+
 ## Quick start (3 minutes)
 
 **Prerequisite: JDK 17+** — that's all. No Maven, no git client needed (the build uses the Maven wrapper / your local `mvn`; cloning is pure-Java JGit).
