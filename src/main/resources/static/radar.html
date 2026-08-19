@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RepoRadar — 开源仓库雷达</title>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #131a22; --panel2: #0f151c; --border: #26313d;
+    --fg: #e6edf3; --dim: #8b949e; --accent: #4cc2ff;
+    --green: #3fb950; --purple: #bc8cff; --orange: #d29922; --red: #f85149;
+    --blue: #58a6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: -apple-system, "SF Pro", "PingFang SC", "Segoe UI", sans-serif; min-height: 100vh; }
+
+  /* top bar */
+  .topbar {
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(12px);
+    background: rgba(11,15,20,.85); border-bottom: 1px solid var(--border);
+    padding: 16px 32px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  }
+  .logo { font-size: 22px; font-weight: 700; letter-spacing: .5px; }
+  .logo em { color: var(--accent); font-style: normal; }
+  .logo .r { display: inline-block; animation: sweep 3.5s linear infinite; }
+  @keyframes sweep { from { transform: rotate(0);} to { transform: rotate(360deg);} }
+  .topbar .spacer { flex: 1; }
+  .btn {
+    padding: 9px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px;
+    background: var(--accent); color: #06121c; font-weight: 600; transition: .15s;
+  }
+  .btn:hover { filter: brightness(1.15); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--dim); }
+  .btn.ghost:hover { color: var(--fg); border-color: var(--dim); }
+  .addbar { display: flex; gap: 8px; }
+  .addbar input {
+    width: 320px; padding: 9px 13px; border-radius: 8px; font-size: 13px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--fg);
+  }
+  .navlink { color: var(--dim); font-size: 13px; text-decoration: none; }
+  .navlink:hover { color: var(--accent); }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 24px 32px 60px; }
+
+  /* alerts */
+  #alerts { display: none; flex-direction: column; gap: 10px; margin-bottom: 22px; }
+  .alert {
+    border-radius: 10px; padding: 14px 18px; font-size: 14px; line-height: 1.6;
+    border: 1px solid; display: flex; gap: 12px; align-items: flex-start;
+  }
+  .alert.BREAKING { background: rgba(248,81,73,.08); border-color: rgba(248,81,73,.4); }
+  .alert.RELEASE { background: rgba(188,140,255,.08); border-color: rgba(188,140,255,.4); }
+  .alert.ACTIVE { background: rgba(63,185,80,.07); border-color: rgba(63,185,80,.35); }
+  .alert .sev { font-weight: 700; white-space: nowrap; }
+  .alert.BREAKING .sev { color: var(--red); }
+  .alert.RELEASE .sev { color: var(--purple); }
+  .alert.ACTIVE .sev { color: var(--green); }
+  .alert .slug { font-weight: 600; margin-right: 6px; }
+  .alert .txt { color: var(--dim); }
+
+  /* stats */
+  #stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 26px; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 20px;
+  }
+  .stat .num { font-size: 26px; font-weight: 700; }
+  .stat .lbl { color: var(--dim); font-size: 12px; margin-top: 4px; }
+  .stat.green .num { color: var(--green); }
+  .stat.purple .num { color: var(--purple); }
+  .stat.red .num { color: var(--red); }
+
+  /* check log */
+  #checklog {
+    display: none; background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px; margin-bottom: 22px; font-family: "SF Mono", Menlo, monospace;
+    font-size: 12px; color: var(--dim); max-height: 200px; overflow-y: auto; line-height: 1.8;
+  }
+
+  /* repo grid */
+  h2.section { font-size: 16px; margin: 8px 0 14px; color: var(--fg); }
+  #grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px; transition: border-color .15s;
+  }
+  .card:hover { border-color: var(--dim); }
+  .card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .card .name { font-weight: 700; font-size: 15px; }
+  .card .name a { color: var(--fg); text-decoration: none; }
+  .card .name a:hover { color: var(--accent); }
+  .badge {
+    font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 20px; white-space: nowrap;
+  }
+  .badge.QUIET { background: rgba(139,148,158,.15); color: var(--dim); }
+  .badge.ACTIVE { background: rgba(63,185,80,.15); color: var(--green); }
+  .badge.RELEASE { background: rgba(188,140,255,.15); color: var(--purple); }
+  .badge.BREAKING { background: rgba(248,81,73,.15); color: var(--red); }
+  .card .meta { color: var(--dim); font-size: 12px; margin-bottom: 10px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .card .digest { font-size: 13.5px; line-height: 1.75; color: var(--fg); }
+  .card .foot { margin-top: 12px; display: flex; justify-content: space-between; align-items: center; }
+  .card .hist-btn { background: none; border: none; color: var(--dim); font-size: 12px; cursor: pointer; padding: 0; }
+  .card .hist-btn:hover { color: var(--accent); }
+  .card .del { background: none; border: none; color: var(--dim); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 6px; }
+  .card .del:hover { color: var(--red); background: rgba(248,81,73,.1); }
+  .history { display: none; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+  .history .h { font-size: 12px; color: var(--dim); padding: 6px 0; border-bottom: 1px solid var(--panel2); line-height: 1.6; }
+  .history .h:last-child { border-bottom: none; }
+  .history .h .d { color: var(--accent); font-family: Menlo, monospace; margin-right: 8px; }
+  .empty { color: var(--dim); text-align: center; padding: 60px 0; font-size: 14px; grid-column: 1/-1; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo"><span class="r">📡</span> Repo<em>Radar</em></div>
+  <a class="navlink" href="/index.html">🔍 单仓库透视 CodeLens →</a>
+  <div class="spacer"></div>
+  <div class="addbar">
+    <input id="addUrl" placeholder="粘贴 GitHub 仓库地址，加入监控">
+    <button class="btn ghost" onclick="addRepo()">＋ 监控</button>
+  </div>
+  <button class="btn" id="checkBtn" onclick="runCheck()">立即巡检</button>
+</div>
+
+<div class="wrap">
+  <div id="alerts"></div>
+
+  <div id="stats">
+    <div class="stat"><div class="num" id="stTotal">0</div><div class="lbl">监控中的仓库</div></div>
+    <div class="stat green"><div class="num" id="stActive">0</div><div class="lbl">有新提交</div></div>
+    <div class="stat purple"><div class="num" id="stRelease">0</div><div class="lbl">发布新版本</div></div>
+    <div class="stat red"><div class="num" id="stBreaking">0</div><div class="lbl">Breaking 变更</div></div>
+  </div>
+
+  <div id="checklog"></div>
+
+  <h2 class="section">📦 监控清单</h2>
+  <div id="grid"><div class="empty">加载中…</div></div>
+</div>
+
+<script>
+const SEV_LABEL = { QUIET: '⚪ 平静', ACTIVE: '🟢 活跃', RELEASE: '🚀 发版', BREAKING: '🚨 Breaking' };
+let polling = null;
+
+async function refresh() {
+  const res = await fetch('/api/radar/overview');
+  const data = await res.json();
+  render(data);
+  if (data.running) startPolling(); else stopPolling();
+}
+
+function render(data) {
+  const repos = data.repos || [];
+  const watched = new Set((data.watchlist || []).map(u => u.replace('https://github.com/', '')));
+  document.getElementById('stTotal').textContent = Math.max(repos.length, watched.size);
+  document.getElementById('stActive').textContent = repos.filter(r => r.severity === 'ACTIVE').length;
+  document.getElementById('stRelease').textContent = repos.filter(r => r.severity === 'RELEASE').length;
+  document.getElementById('stBreaking').textContent = repos.filter(r => r.severity === 'BREAKING').length;
+
+  // alerts
+  const alertBox = document.getElementById('alerts');
+  const noisy = repos.filter(r => r.severity && r.severity !== 'QUIET');
+  if (noisy.length) {
+    alertBox.style.display = 'flex';
+    alertBox.innerHTML = noisy.map(r => `
+      <div class="alert ${r.severity}">
+        <span class="sev">${SEV_LABEL[r.severity] || r.severity}</span>
+        <div><span class="slug">${esc(r.slug)}</span><span class="txt">${esc(r.digest)}</span></div>
+      </div>`).join('');
+  } else {
+    alertBox.style.display = 'none';
+  }
+
+  // cards
+  const grid = document.getElementById('grid');
+  if (!repos.length) {
+    grid.innerHTML = '<div class="empty">还没有监控任何仓库 —— 在右上角粘贴一个 GitHub 地址开始。</div>';
+    return;
+  }
+  const order = { BREAKING: 0, RELEASE: 1, ACTIVE: 2, QUIET: 3 };
+  repos.sort((a, b) => (order[a.severity] ?? 4) - (order[b.severity] ?? 4));
+  grid.innerHTML = repos.map(r => `
+    <div class="card">
+      <div class="head">
+        <span class="name"><a href="https://github.com/${esc(r.slug)}" target="_blank">${esc(r.slug)}</a></span>
+        <span class="badge ${r.severity}">${SEV_LABEL[r.severity] || r.severity}</span>
+        <div style="flex:1"></div>
+        <button class="del" title="移出监控" onclick="removeRepo('${esc(r.slug)}')">✕</button>
+      </div>
+      <div class="meta">
+        ${r.language ? `<span>💻 ${esc(r.language)}</span>` : ''}
+        <span>⭐ ${r.stars}</span>
+        ${r.lastReleaseTag ? `<span>🏷 ${esc(r.lastReleaseTag)}</span>` : ''}
+        ${r.newCommitCount ? `<span>📝 +${r.newCommitCount} commits</span>` : ''}
+        <span>🕐 ${esc((r.lastCheckAt || '').replace('T', ' ').replace('Z', '').slice(0, 16))}</span>
+      </div>
+      <div class="digest">${esc(r.digest || '暂无摘要')}</div>
+      <div class="foot">
+        <button class="hist-btn" onclick="toggleHist(this)">▸ 历史记录 (${(r.history || []).length})</button>
+      </div>
+      <div class="history">
+        ${(r.history || []).map(h => `<div class="h"><span class="d">${esc((h.date || '').slice(0, 10))}</span>[${h.severity}] ${esc(h.digest)}</div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function toggleHist(btn) {
+  const h = btn.closest('.card').querySelector('.history');
+  const open = h.style.display === 'block';
+  h.style.display = open ? 'none' : 'block';
+  btn.textContent = (open ? '▸ 历史记录' : '▾ 收起');
+}
+
+async function runCheck() {
+  const btn = document.getElementById('checkBtn');
+  btn.disabled = true;
+  document.getElementById('checklog').style.display = 'block';
+  await fetch('/api/radar/check?lang=Chinese', { method: 'POST' });
+  startPolling();
+}
+
+function startPolling() {
+  if (polling) return;
+  polling = setInterval(async () => {
+    const res = await fetch('/api/radar/check/status');
+    const s = await res.json();
+    const box = document.getElementById('checklog');
+    box.innerHTML = (s.log || []).map(esc).join('<br>');
+    box.scrollTop = box.scrollHeight;
+    if (!s.running) {
+      stopPolling();
+      document.getElementById('checkBtn').disabled = false;
+      refresh();
+    }
+  }, 1500);
+}
+function stopPolling() { if (polling) { clearInterval(polling); polling = null; } }
+
+async function addRepo() {
+  const input = document.getElementById('addUrl');
+  const url = input.value.trim();
+  if (!url) return;
+  await fetch('/api/radar/add?url=' + encodeURIComponent(url), { method: 'POST' });
+  input.value = '';
+  runCheck();
+}
+
+async function removeRepo(slug) {
+  if (!confirm('停止监控 ' + slug + '？')) return;
+  await fetch('/api/radar/remove?slug=' + encodeURIComponent(slug), { method: 'POST' });
+  refresh();
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+refresh();
+</script>
+</body>
+</html>
