@@ -5,17 +5,16 @@ import io.codelens.engine.AnalysisEvent;
 import io.codelens.engine.CodeLensEngine;
 import java.nio.file.Path;
 
-/** CLI mode: analyze one repository, stream progress to the terminal. */
+/** CLI 模式：分析一个仓库，并将进度流式输出到终端。 */
 public class CliApp {
 
-    private static final String ESC = "\u001B";
-    private static final String RESET = ESC + "[0m";
-    private static final String DIM = ESC + "[2m";
-    private static final String CYAN = ESC + "[36m";
-    private static final String GREEN = ESC + "[32m";
-    private static final String YELLOW = ESC + "[33m";
-    private static final String MAGENTA = ESC + "[35m";
-    private static final String RED = ESC + "[31m";
+    private static final String RESET = "\u001B[0m";
+    private static final String DIM = "\u001B[2m";
+    private static final String CYAN = "\u001B[36m";
+    private static final String GREEN = "\u001B[32m";
+    private static final String YELLOW = "\u001B[33m";
+    private static final String MAGENTA = "\u001B[35m";
+    private static final String RED = "\u001B[31m";
 
     public static int run(String[] args) {
         String repoUrl = null;
@@ -66,6 +65,13 @@ public class CliApp {
         switch (ev.kind()) {
             case "phase" ->
                 System.out.println(CYAN + "▸ " + ev.message() + RESET);
+            case "step" -> {
+                String msg = ev.message();
+                int pipe = msg.indexOf('|');
+                System.out.println();
+                System.out.println(GREEN + "■ STEP: "
+                        + (pipe >= 0 ? msg.substring(pipe + 1) : msg) + RESET);
+            }
             case "agentStart" -> {
                 if (!"codelens".equals(ev.agent())) {
                     System.out.println();
@@ -89,7 +95,7 @@ public class CliApp {
             case "error" ->
                 System.out.println(RED + "✘ " + ev.message() + RESET);
             case "done" -> {
-                // handled after analyze() returns
+                // 在 analyze() 返回后统一处理
             }
             default -> { }
         }

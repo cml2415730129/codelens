@@ -33,9 +33,35 @@
   }
   .controls button:disabled { opacity: .45; cursor: not-allowed; }
   #status { padding: 0 32px 12px; color: var(--dim); font-size: 13px; min-height: 20px; }
+
+  /* ---- progress stepper ---- */
+  #progress { padding: 4px 32px 18px; }
+  .bar-track { height: 4px; background: var(--panel); border-radius: 4px; overflow: hidden; margin-bottom: 18px; }
+  .bar-fill { height: 100%; width: 0; background: var(--accent); border-radius: 4px; transition: width .5s ease; }
+  .steps { display: flex; align-items: flex-start; }
+  .step { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; width: 108px; text-align: center; }
+  .step .node {
+    width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--border); background: var(--panel); font-size: 15px; color: var(--dim);
+    transition: all .25s ease;
+  }
+  .step .lbl { margin-top: 7px; font-size: 12px; color: var(--dim); line-height: 1.35; }
+  .step.active .node { border-color: var(--accent); color: var(--accent); animation: nodepulse 1.1s ease-in-out infinite alternate; }
+  .step.active .lbl { color: var(--fg); font-weight: 600; }
+  .step.done .node { border-color: var(--green); background: rgba(63,185,80,.12); color: var(--green); }
+  .step.done .lbl { color: var(--green); }
+  @keyframes nodepulse { from { box-shadow: 0 0 0 0 rgba(88,166,255,.35); } to { box-shadow: 0 0 0 7px rgba(88,166,255,0); } }
+  .conn { flex: 1 1 auto; height: 2px; background: var(--border); margin-top: 16px; min-width: 14px; transition: background .3s; }
+  .conn.done { background: var(--green); }
+  .prog-meta { display: flex; gap: 18px; margin-top: 14px; font-size: 12.5px; color: var(--dim); align-items: center; flex-wrap: wrap; }
+  .prog-meta .timer { font-family: "SF Mono", Menlo, monospace; color: var(--accent); }
+  .prog-meta .doing { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70ch; }
+  .prog-meta .doing b { color: var(--purple); font-weight: 600; }
+
   #panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; padding: 8px 32px 20px; }
   .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   .panel h2 { font-size: 13px; padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .panel h2 .tools { margin-left: auto; font-size: 11px; color: var(--dim); font-weight: 400; font-family: "SF Mono", Menlo, monospace; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
   .dot.running { background: var(--orange); animation: pulse 1s infinite alternate; }
   .dot.done { background: var(--green); }
@@ -82,18 +108,27 @@
 </div>
 <div id="status"></div>
 
+<div id="progress" class="hidden">
+  <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+  <div class="steps" id="steps"></div>
+  <div class="prog-meta">
+    <span>⏱ <span class="timer" id="elapsed">0:00</span></span>
+    <span class="doing" id="nowDoing"></span>
+  </div>
+</div>
+
 <div id="panels" class="hidden">
   <div class="panel" data-agent="codelens">
-    <h2><span class="dot"></span> 🎯 Orchestrator</h2><div class="log"></div>
+    <h2><span class="dot"></span> 🎯 Orchestrator<span class="tools"></span></h2><div class="log"></div>
   </div>
   <div class="panel" data-agent="structure-analyst">
-    <h2><span class="dot"></span> 🏛️ Structure Analyst</h2><div class="log"></div>
+    <h2><span class="dot"></span> 🏛️ Structure Analyst<span class="tools"></span></h2><div class="log"></div>
   </div>
   <div class="panel" data-agent="history-digger">
-    <h2><span class="dot"></span> 📜 History Digger</h2><div class="log"></div>
+    <h2><span class="dot"></span> 📜 History Digger<span class="tools"></span></h2><div class="log"></div>
   </div>
   <div class="panel" data-agent="guide-writer">
-    <h2><span class="dot"></span> 📖 Guide Writer</h2><div class="log"></div>
+    <h2><span class="dot"></span> 📖 Guide Writer<span class="tools"></span></h2><div class="log"></div>
   </div>
 </div>
 
@@ -108,6 +143,84 @@ mermaid.initialize({ startOnLoad: false, theme: 'dark' });
 
 let outputDir = null;
 
+/* ---- progress stepper ---- */
+const STEPS = [
+  { id: 'prepare',  icon: '🧰', label: 'Prepare workspace' },
+  { id: 'clone',    icon: '📥', label: 'Clone & index repo' },
+  { id: 'team',     icon: '🎯', label: 'Plan mission' },
+  { id: 'parallel', icon: '⚡', label: 'Parallel analysis ×3' },
+  { id: 'assemble', icon: '📋', label: 'Assemble report' }
+];
+let stepStatus = {};   // id -> 'active' | 'done'
+let startedAt = null;
+let timer = null;
+let toolCounts = {};
+
+function buildSteps() {
+  const box = document.getElementById('steps');
+  box.innerHTML = STEPS.map((s, i) =>
+    (i > 0 ? '<div class="conn" id="conn-' + s.id + '"></div>' : '') +
+    '<div class="step" id="step-' + s.id + '">' +
+      '<div class="node">' + s.icon + '</div>' +
+      '<div class="lbl">' + s.label + '</div>' +
+    '</div>').join('');
+}
+
+function paintSteps() {
+  let doneCount = 0;
+  STEPS.forEach(s => {
+    const el = document.getElementById('step-' + s.id);
+    if (!el) return;
+    const st = stepStatus[s.id] || '';
+    el.className = 'step' + (st ? ' ' + st : '');
+    const node = el.querySelector('.node');
+    const def = STEPS.find(x => x.id === s.id);
+    node.textContent = st === 'done' ? '✓' : def.icon;
+    if (st === 'done') doneCount++;
+    const conn = document.getElementById('conn-' + s.id);
+    if (conn) conn.className = 'conn' + (st === 'done' ? ' done' : '');
+  });
+  const pct = Math.round(doneCount / STEPS.length * 100);
+  document.getElementById('barFill').style.width = pct + '%';
+}
+
+function reachStep(id) {
+  let passed = true;
+  for (const s of STEPS) {
+    if (s.id === id) { passed = false; if (stepStatus[s.id] !== 'done') stepStatus[s.id] = 'active'; continue; }
+    if (passed && stepStatus[s.id] !== 'done') stepStatus[s.id] = 'done';
+  }
+  paintSteps();
+}
+
+function finishSteps() {
+  STEPS.forEach(s => stepStatus[s.id] = 'done');
+  paintSteps();
+}
+
+function fmtElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+function startTimer() {
+  startedAt = Date.now();
+  document.getElementById('elapsed').textContent = '0:00';
+  if (timer) clearInterval(timer);
+  timer = setInterval(() => {
+    document.getElementById('elapsed').textContent = fmtElapsed(Date.now() - startedAt);
+  }, 1000);
+}
+
+function stopTimer() {
+  if (timer) { clearInterval(timer); timer = null; }
+}
+
+function setDoing(html) {
+  document.getElementById('nowDoing').innerHTML = html || '';
+}
+
+/* ---- agent panels ---- */
 function log(agent, cls, text) {
   const panel = document.querySelector(`.panel[data-agent="${agent}"]`);
   if (!panel) return;
@@ -124,6 +237,12 @@ function setDot(agent, state) {
   if (panel) panel.querySelector('.dot').className = 'dot ' + state;
 }
 
+function bumpTools(agent) {
+  toolCounts[agent] = (toolCounts[agent] || 0) + 1;
+  const panel = document.querySelector(`.panel[data-agent="${agent}"]`);
+  if (panel) panel.querySelector('.tools').textContent = '⚙ ×' + toolCounts[agent];
+}
+
 function setStatus(text) { document.getElementById('status').textContent = text; }
 
 function startAnalysis() {
@@ -133,10 +252,16 @@ function startAnalysis() {
 
   document.getElementById('go').disabled = true;
   document.getElementById('panels').classList.remove('hidden');
+  document.getElementById('progress').classList.remove('hidden');
   document.getElementById('reportArea').style.display = 'none';
   document.querySelectorAll('.log').forEach(l => l.innerHTML = '');
   document.querySelectorAll('.dot').forEach(d => d.className = 'dot');
-  setStatus('Cloning & analyzing... this takes a few minutes for large repos.');
+  document.querySelectorAll('.tools').forEach(t => t.textContent = '');
+  stepStatus = {}; toolCounts = {};
+  buildSteps(); paintSteps();
+  startTimer();
+  setDoing('');
+  setStatus('Starting analysis...');
 
   const es = new EventSource('/api/analyze?repoUrl=' + encodeURIComponent(url) + '&lang=' + encodeURIComponent(lang));
 
@@ -145,24 +270,55 @@ function startAnalysis() {
     try { ev = JSON.parse(msg.data); } catch { return; }
     const agent = ev.agent === 'system' ? null : ev.agent;
     switch (ev.kind) {
+      case 'step': {
+        const pipe = (ev.message || '').indexOf('|');
+        const id = pipe >= 0 ? ev.message.slice(0, pipe) : ev.message;
+        const label = pipe >= 0 ? ev.message.slice(pipe + 1) : ev.message;
+        reachStep(id);
+        setStatus(label + '...');
+        setDoing('▸ ' + label);
+        break;
+      }
       case 'phase':
         setStatus(ev.message);
+        setDoing('▸ ' + ev.message);
         if (agent) log(agent, 'tool', '▸ ' + ev.message);
         break;
-      case 'agentStart': setDot(agent, 'running'); log(agent, 'tool', '— started'); break;
-      case 'agentEnd':   setDot(agent, 'done');    log(agent, 'tool', '— finished'); break;
-      case 'tool':       log(agent, 'tool', '⚙ ' + ev.message); break;
+      case 'agentStart':
+        setDot(agent, 'running');
+        if (agent !== 'codelens') {
+          reachStep('parallel');
+          setDoing('⚡ <b>' + agent + '</b> started');
+        }
+        log(agent, 'tool', '— started');
+        break;
+      case 'agentEnd':
+        setDot(agent, 'done');
+        log(agent, 'tool', '— finished');
+        if (agent !== 'codelens') setDoing('✔ <b>' + agent + '</b> finished');
+        break;
+      case 'tool':
+        log(agent, 'tool', '⚙ ' + ev.message);
+        bumpTools(agent);
+        setDoing('⚙ <b>' + agent + '</b> → ' + ev.message);
+        if (ev.message === 'agent_spawn') reachStep('parallel');
+        break;
       case 'text':
         if (agent === 'codelens') log(agent, 'text', ev.message);
         break;
       case 'error':
         setStatus('❌ ' + ev.message);
+        setDoing('');
         es.close();
+        stopTimer();
         document.getElementById('go').disabled = false;
         break;
       case 'done':
         outputDir = ev.message;
-        setStatus('✅ Analysis complete. Report ready below.');
+        finishSteps();
+        stopTimer();
+        setStatus('✅ Analysis complete in ' + document.getElementById('elapsed').textContent + '. Report ready below.');
+        setDoing('');
         es.close();
         document.getElementById('go').disabled = false;
         loadReport();
@@ -171,6 +327,7 @@ function startAnalysis() {
   };
   es.onerror = () => {
     es.close();
+    stopTimer();
     document.getElementById('go').disabled = false;
   };
 }
@@ -180,7 +337,6 @@ async function loadReport() {
   const res = await fetch('/api/reports?dir=' + encodeURIComponent(outputDir));
   const files = await res.json();
   if (!files.length) return;
-  // REPORT.md first
   files.sort((a, b) => (a === 'REPORT.md' ? -1 : b === 'REPORT.md' ? 1 : a.localeCompare(b)));
   const tabs = document.getElementById('tabs');
   tabs.innerHTML = '';
@@ -209,7 +365,6 @@ async function showFile(file, btn) {
   const md = await res.text();
   const el = document.getElementById('reportContent');
   el.innerHTML = marked.parse(md);
-  // Render mermaid code blocks
   el.querySelectorAll('pre code.language-mermaid, code.language-mermaid').forEach(async (block) => {
     const pre = block.closest('pre') || block;
     const div = document.createElement('div');
@@ -219,6 +374,8 @@ async function showFile(file, btn) {
   });
   try { await mermaid.run({ nodes: el.querySelectorAll('.mermaid') }); } catch (e) { /* leave code as-is */ }
 }
+
+buildSteps();
 </script>
 </body>
 </html>
