@@ -16,7 +16,8 @@ public class WebApp {
         app.run(args);
         int p = port(args);
         System.out.println();
-        System.out.println("🔍 CodeLens web UI: http://localhost:" + p);
+        System.out.println("📡 RepoRadar dashboard: http://localhost:" + p + "/radar.html");
+        System.out.println("🔍 CodeLens single-repo UI: http://localhost:" + p + "/index.html");
         System.out.println("   Press Ctrl+C to stop.");
     }
 

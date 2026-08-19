@@ -14,6 +14,11 @@ import io.codelens.web.WebApp;
 public class CodeLens {
 
     public static void main(String[] args) {
+        if (args.length > 0 && "radar".equals(args[0])) {
+            System.exit(io.codelens.radar.RadarApp.run(
+                    java.util.Arrays.copyOfRange(args, 1, args.length)));
+            return;
+        }
         for (String arg : args) {
             if ("--serve".equals(arg)) {
                 WebApp.run(args);
