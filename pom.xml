@@ -13,7 +13,7 @@
 
     <groupId>io.codelens</groupId>
     <artifactId>codelens</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <name>codelens</name>
     <description>CodeLens - X-ray any GitHub repository with a team of AI agents</description>
     <url>https://github.com/cml2415730129/codelens</url>
