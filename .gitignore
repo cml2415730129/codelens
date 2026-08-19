@@ -1,0 +1,19 @@
+# Local config with real keys — NEVER commit
+config.yml
+
+# Build
+target/
+
+# Runtime output
+output/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# OS
+.DS_Store

@@ -1,0 +1,49 @@
+# CodeLens — build & run helper.
+#
+#   ./codelens <github-repo-url>     CLI mode
+#   ./codelens --serve [--port N]    Web mode (default port 8321)
+#
+# Requires JDK 17+. Maven is NOT required (uses ./mvnw if present, else mvn).
+
+set -e
+cd "$(dirname "$0")"
+
+# --- Java version check ---
+if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/java" ]; then
+  JAVA="$JAVA_HOME/bin/java"
+else
+  JAVA="$(command -v java || true)"
+fi
+if [ -z "$JAVA" ]; then
+  echo "❌ Java not found. CodeLens requires JDK 17+."
+  echo "   Install: https://adoptium.net/ (or: brew install temurin@21)"
+  exit 1
+fi
+JAVA_VER=$("$JAVA" -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)
+if [ -z "$JAVA_VER" ] || [ "$JAVA_VER" -lt 17 ]; then
+  echo "❌ Java $JAVA_VER detected, but CodeLens requires JDK 17+."
+  echo "   Install: https://adoptium.net/ (or: brew install temurin@21)"
+  exit 1
+fi
+
+# --- Build if needed ---
+JAR="target/codelens.jar"
+NEEDS_BUILD=0
+if [ ! -f "$JAR" ]; then
+  NEEDS_BUILD=1
+elif [ -n "$(find src pom.xml -newer "$JAR" -print -quit 2>/dev/null)" ]; then
+  NEEDS_BUILD=1
+fi
+if [ "$NEEDS_BUILD" = "1" ]; then
+  echo "🔨 Building CodeLens (first build downloads dependencies, please wait)..."
+  if [ -f "./mvnw" ]; then
+    ./mvnw -q -DskipTests package
+  elif command -v mvn >/dev/null 2>&1; then
+    mvn -q -DskipTests package
+  else
+    echo "❌ Maven not found. Install Maven (https://maven.apache.org) or run once with: mvn wrapper:wrapper"
+    exit 1
+  fi
+fi
+
+exec "$JAVA" -jar "$JAR" "$@"

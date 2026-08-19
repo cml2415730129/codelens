@@ -1,0 +1,36 @@
+# CodeLens configuration.
+# Copy this file to `config.yml` and adjust. config.yml is git-ignored — never commit real keys.
+#
+# Any value may reference an environment variable:  api-key: ${MY_KEY}
+
+model:
+  # Provider prefix understood by AgentScope's ModelRegistry.
+  #   kimi        (Moonshot AI, default endpoint https://api.moonshot.cn/v1)
+  #   openai      (OpenAI, or any OpenAI-compatible endpoint via base-url)
+  #   deepseek / glm / minimax  (OpenAI-compatible, set base-url accordingly)
+  #   dashscope   (Alibaba Qwen)
+  #   anthropic   (Claude)
+  #   gemini      (Google)
+  #   ollama      (local, no API key needed)
+  provider: kimi
+  name: kimi-k2
+
+  # Prefer the environment variable over writing the key here.
+  api-key: ${MODEL_API_KEY}
+
+  # Custom endpoint (optional). Examples:
+  #   DeepSeek:  https://api.deepseek.com/v1
+  #   OpenAI:    https://api.openai.com/v1
+  # base-url: ""
+
+  # max-completion-tokens: 16000
+
+analysis:
+  # Git clone depth. Larger = more history for the History Digger, slower clones.
+  history-depth: 300
+  # Max reasoning iterations per subagent.
+  subagent-steps: 30
+
+output:
+  # Where Markdown reports are written.
+  dir: ./output
