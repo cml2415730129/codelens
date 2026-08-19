@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeLens — X-ray any repository</title>
+<script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --fg: #e6edf3; --dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --purple: #bc8cff; --orange: #d29922; --red: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--fg); font-family: -apple-system, "SF Pro", "Segoe UI", Roboto, sans-serif; }
+  header { padding: 28px 32px 18px; border-bottom: 1px solid var(--border); }
+  header h1 { font-size: 26px; letter-spacing: .5px; }
+  header h1 span { color: var(--accent); }
+  header p { color: var(--dim); margin-top: 6px; font-size: 14px; }
+  .controls { display: flex; gap: 10px; padding: 18px 32px; flex-wrap: wrap; }
+  .controls input[type=text] {
+    flex: 1; min-width: 320px; padding: 11px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--panel); color: var(--fg); font-size: 14px;
+  }
+  .controls select {
+    padding: 11px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--fg);
+  }
+  .controls button {
+    padding: 11px 22px; border-radius: 8px; border: none; cursor: pointer;
+    background: var(--accent); color: #0d1117; font-weight: 600; font-size: 14px;
+  }
+  .controls button:disabled { opacity: .45; cursor: not-allowed; }
+  #status { padding: 0 32px 12px; color: var(--dim); font-size: 13px; min-height: 20px; }
+  #panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; padding: 8px 32px 20px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .panel h2 { font-size: 13px; padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  .dot.running { background: var(--orange); animation: pulse 1s infinite alternate; }
+  .dot.done { background: var(--green); }
+  @keyframes pulse { from { opacity: .4; } to { opacity: 1; } }
+  .log { height: 200px; overflow-y: auto; padding: 10px 14px; font-family: "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.65; color: var(--dim); }
+  .log .tool { color: var(--purple); }
+  .log .text { color: var(--fg); white-space: pre-wrap; }
+  #reportArea { padding: 0 32px 48px; display: none; }
+  #reportArea h2 { font-size: 18px; margin: 18px 0 12px; }
+  #tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  #tabs button {
+    padding: 8px 16px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--panel); color: var(--dim); cursor: pointer; font-size: 13px;
+  }
+  #tabs button.active { background: var(--accent); color: #0d1117; border-color: var(--accent); font-weight: 600; }
+  #reportContent {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+    padding: 28px 32px; line-height: 1.75; font-size: 15px;
+  }
+  #reportContent h1, #reportContent h2, #reportContent h3 { margin: 22px 0 10px; }
+  #reportContent h1:first-child { margin-top: 0; }
+  #reportContent code { background: #0d1117; padding: 2px 6px; border-radius: 5px; font-size: 13px; }
+  #reportContent pre { background: #0d1117; padding: 14px; border-radius: 8px; overflow-x: auto; margin: 12px 0; }
+  #reportContent pre code { padding: 0; }
+  #reportContent table { border-collapse: collapse; margin: 12px 0; }
+  #reportContent th, #reportContent td { border: 1px solid var(--border); padding: 7px 12px; font-size: 14px; }
+  #reportContent a { color: var(--accent); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 Code<span>Lens</span></h1>
+  <p>X-ray any GitHub repository — a team of AI agents maps its architecture, digs through its history, and writes your onboarding guide. Powered by AgentScope Java.</p>
+</header>
+
+<div class="controls">
+  <input type="text" id="repoUrl" placeholder="https://github.com/owner/repo" autofocus>
+  <select id="lang">
+    <option value="English">English</option>
+    <option value="Chinese">中文</option>
+  </select>
+  <button id="go" onclick="startAnalysis()">Analyze</button>
+</div>
+<div id="status"></div>
+
+<div id="panels" class="hidden">
+  <div class="panel" data-agent="codelens">
+    <h2><span class="dot"></span> 🎯 Orchestrator</h2><div class="log"></div>
+  </div>
+  <div class="panel" data-agent="structure-analyst">
+    <h2><span class="dot"></span> 🏛️ Structure Analyst</h2><div class="log"></div>
+  </div>
+  <div class="panel" data-agent="history-digger">
+    <h2><span class="dot"></span> 📜 History Digger</h2><div class="log"></div>
+  </div>
+  <div class="panel" data-agent="guide-writer">
+    <h2><span class="dot"></span> 📖 Guide Writer</h2><div class="log"></div>
+  </div>
+</div>
+
+<div id="reportArea">
+  <h2>📄 Report</h2>
+  <div id="tabs"></div>
+  <div id="reportContent"></div>
+</div>
+
+<script>
+mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+
+let outputDir = null;
+
+function log(agent, cls, text) {
+  const panel = document.querySelector(`.panel[data-agent="${agent}"]`);
+  if (!panel) return;
+  const el = panel.querySelector('.log');
+  const line = document.createElement('div');
+  line.className = cls;
+  line.textContent = text;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setDot(agent, state) {
+  const panel = document.querySelector(`.panel[data-agent="${agent}"]`);
+  if (panel) panel.querySelector('.dot').className = 'dot ' + state;
+}
+
+function setStatus(text) { document.getElementById('status').textContent = text; }
+
+function startAnalysis() {
+  const url = document.getElementById('repoUrl').value.trim();
+  const lang = document.getElementById('lang').value;
+  if (!url) { setStatus('Please enter a GitHub repository URL.'); return; }
+
+  document.getElementById('go').disabled = true;
+  document.getElementById('panels').classList.remove('hidden');
+  document.getElementById('reportArea').style.display = 'none';
+  document.querySelectorAll('.log').forEach(l => l.innerHTML = '');
+  document.querySelectorAll('.dot').forEach(d => d.className = 'dot');
+  setStatus('Cloning & analyzing... this takes a few minutes for large repos.');
+
+  const es = new EventSource('/api/analyze?repoUrl=' + encodeURIComponent(url) + '&lang=' + encodeURIComponent(lang));
+
+  es.onmessage = (msg) => {
+    let ev;
+    try { ev = JSON.parse(msg.data); } catch { return; }
+    const agent = ev.agent === 'system' ? null : ev.agent;
+    switch (ev.kind) {
+      case 'phase':
+        setStatus(ev.message);
+        if (agent) log(agent, 'tool', '▸ ' + ev.message);
+        break;
+      case 'agentStart': setDot(agent, 'running'); log(agent, 'tool', '— started'); break;
+      case 'agentEnd':   setDot(agent, 'done');    log(agent, 'tool', '— finished'); break;
+      case 'tool':       log(agent, 'tool', '⚙ ' + ev.message); break;
+      case 'text':
+        if (agent === 'codelens') log(agent, 'text', ev.message);
+        break;
+      case 'error':
+        setStatus('❌ ' + ev.message);
+        es.close();
+        document.getElementById('go').disabled = false;
+        break;
+      case 'done':
+        outputDir = ev.message;
+        setStatus('✅ Analysis complete. Report ready below.');
+        es.close();
+        document.getElementById('go').disabled = false;
+        loadReport();
+        break;
+    }
+  };
+  es.onerror = () => {
+    es.close();
+    document.getElementById('go').disabled = false;
+  };
+}
+
+async function loadReport() {
+  if (!outputDir) return;
+  const res = await fetch('/api/reports?dir=' + encodeURIComponent(outputDir));
+  const files = await res.json();
+  if (!files.length) return;
+  // REPORT.md first
+  files.sort((a, b) => (a === 'REPORT.md' ? -1 : b === 'REPORT.md' ? 1 : a.localeCompare(b)));
+  const tabs = document.getElementById('tabs');
+  tabs.innerHTML = '';
+  const labels = {
+    'REPORT.md': '📋 Full Report',
+    '00-overview.md': '🎯 Overview',
+    '01-architecture.md': '🏛️ Architecture',
+    '02-history.md': '📜 History',
+    '03-getting-started.md': '📖 Getting Started'
+  };
+  files.forEach((f, i) => {
+    const btn = document.createElement('button');
+    btn.textContent = labels[f] || f;
+    btn.onclick = () => { showFile(f, btn); };
+    tabs.appendChild(btn);
+    if (i === 0) showFile(f, btn);
+  });
+  document.getElementById('reportArea').style.display = 'block';
+  document.getElementById('reportArea').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function showFile(file, btn) {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const res = await fetch('/api/report?dir=' + encodeURIComponent(outputDir) + '&file=' + encodeURIComponent(file));
+  const md = await res.text();
+  const el = document.getElementById('reportContent');
+  el.innerHTML = marked.parse(md);
+  // Render mermaid code blocks
+  el.querySelectorAll('pre code.language-mermaid, code.language-mermaid').forEach(async (block) => {
+    const pre = block.closest('pre') || block;
+    const div = document.createElement('div');
+    div.className = 'mermaid';
+    div.textContent = block.textContent;
+    pre.replaceWith(div);
+  });
+  try { await mermaid.run({ nodes: el.querySelectorAll('.mermaid') }); } catch (e) { /* leave code as-is */ }
+}
+</script>
+</body>
+</html>
