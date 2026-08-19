@@ -1,0 +1,9 @@
+{
+  "name": "codelens-reporadar",
+  "private": true,
+  "version": "0.2.0",
+  "description": "CodeLens + RepoRadar: x-ray and continuously watch GitHub repositories with AI agents",
+  "scripts": {
+    "dev": "./codelens --serve"
+  }
+}
