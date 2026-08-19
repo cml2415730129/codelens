@@ -123,6 +123,8 @@ public class RadarEngine {
         cur.description = info.description() != null ? info.description() : "";
         cur.language = info.language() != null ? info.language() : "";
         cur.stars = info.stars();
+        cur.forks = info.forks();
+        cur.openIssues = info.openIssues();
 
         ReleaseInfo release = github.getLatestRelease(slug);
         String releaseTag = release != null ? release.tag() : "";
@@ -153,16 +155,7 @@ public class RadarEngine {
                 }
             }
             cur.newCommitCount = newCommits;
-
-            if (breaking) {
-                cur.severity = "BREAKING";
-            } else if (newRelease) {
-                cur.severity = "RELEASE";
-            } else if (newCommits > 0) {
-                cur.severity = "ACTIVE";
-            } else {
-                cur.severity = "QUIET";
-            }
+            cur.severity = classify(newCommits, newRelease, breaking);
 
             if ("QUIET".equals(cur.severity)) {
                 cur.digest = "无新变化";
@@ -179,8 +172,21 @@ public class RadarEngine {
         }
         if (release != null) {
             cur.lastReleaseTag = releaseTag;
+            cur.lastReleaseAt = release.publishedAt();
         }
         cur.lastCheckAt = now;
+        String today = now.length() >= 10 ? now.substring(0, 10) : now;
+        if (cur.starHistory.isEmpty()
+                || !cur.starHistory.get(cur.starHistory.size() - 1).date().equals(today)) {
+            cur.starHistory.add(new RepoState.StarPoint(today, cur.stars));
+            if (cur.starHistory.size() > 90) {
+                cur.starHistory = new ArrayList<>(
+                        cur.starHistory.subList(cur.starHistory.size() - 90, cur.starHistory.size()));
+            }
+        } else {
+            cur.starHistory.set(cur.starHistory.size() - 1,
+                    new RepoState.StarPoint(today, cur.stars));
+        }
         cur.history.add(0, new RepoState.HistoryEntry(now, cur.severity, cur.digest));
         if (cur.history.size() > MAX_HISTORY) {
             cur.history = new ArrayList<>(cur.history.subList(0, MAX_HISTORY));
@@ -266,6 +272,20 @@ public class RadarEngine {
                 })
                 .blockLast();
         return sb.toString().trim();
+    }
+
+    /** Severity ladder: BREAKING > RELEASE > ACTIVE > QUIET. */
+    static String classify(int newCommits, boolean newRelease, boolean breaking) {
+        if (breaking) {
+            return "BREAKING";
+        }
+        if (newRelease) {
+            return "RELEASE";
+        }
+        if (newCommits > 0) {
+            return "ACTIVE";
+        }
+        return "QUIET";
     }
 
     private static String badge(String severity) {

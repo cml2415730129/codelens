@@ -58,12 +58,13 @@ public class RadarStore {
         }
     }
 
-    public void saveWatchlist(List<String> urls) throws IOException {
+    public synchronized void saveWatchlist(List<String> urls) throws IOException {
         StringBuilder sb = new StringBuilder("# RepoRadar watchlist — one GitHub URL per line\nrepos:\n");
         for (String u : urls) {
             sb.append("  - ").append(u).append("\n");
         }
-        Files.writeString(watchlistFile, sb.toString());
+        writeAtomically(watchlistFile, sb.toString().getBytes(
+                java.nio.charset.StandardCharsets.UTF_8));
     }
 
     // ---------- state ----------
@@ -89,14 +90,31 @@ public class RadarStore {
         }
     }
 
-    public void saveState(Map<String, RepoState> states) {
+    public synchronized void saveState(Map<String, RepoState> states) {
         try {
             Files.createDirectories(stateFile.getParent());
             Map<String, Object> wrapper = new LinkedHashMap<>();
             wrapper.put("repos", states);
-            json.writeValue(stateFile.toFile(), wrapper);
+            writeAtomically(stateFile, json.writeValueAsBytes(wrapper));
         } catch (IOException e) {
             throw new RuntimeException("Failed to save radar state", e);
+        }
+    }
+
+    /**
+     * Writes bytes to a temp file in the same directory, then moves it over the
+     * target. A crash mid-write can never leave a truncated target file.
+     */
+    private static void writeAtomically(Path target, byte[] content) throws IOException {
+        Files.createDirectories(target.toAbsolutePath().getParent());
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        Files.write(tmp, content);
+        try {
+            Files.move(tmp, target,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
