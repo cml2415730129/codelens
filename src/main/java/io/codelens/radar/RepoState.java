@@ -12,16 +12,22 @@ public class RepoState {
 
     public record HistoryEntry(String date, String severity, String digest) {}
 
+    public record StarPoint(String date, long stars) {}
+
     public String slug;
     public String description = "";
     public String language = "";
     public long stars;
+    public long forks;
+    public long openIssues;
     public String lastCommitSha = "";
     public String lastCommitDate = "";
     public String lastReleaseTag = "";
+    public String lastReleaseAt = "";
     public String lastCheckAt = "";
     public String severity = "QUIET";
     public String digest = "";
     public int newCommitCount;
     public List<HistoryEntry> history = new ArrayList<>();
+    public List<StarPoint> starHistory = new ArrayList<>();
 }

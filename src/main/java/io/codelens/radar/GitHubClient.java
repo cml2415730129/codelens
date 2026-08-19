@@ -15,7 +15,8 @@ import java.util.List;
 public class GitHubClient {
 
     public record RepoInfo(String slug, String description, String language,
-                           long stars, String defaultBranch, String pushedAt) {}
+                           long stars, long forks, long openIssues,
+                           String defaultBranch, String pushedAt) {}
 
     public record CommitInfo(String sha, String date, String author, String message) {}
 
@@ -63,6 +64,8 @@ public class GitHubClient {
                 text(n, "description"),
                 text(n, "language"),
                 n.path("stargazers_count").asLong(),
+                n.path("forks_count").asLong(),
+                n.path("open_issues_count").asLong(),
                 text(n, "default_branch"),
                 text(n, "pushed_at"));
     }
